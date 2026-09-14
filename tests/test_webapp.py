@@ -15,6 +15,9 @@ def test_config_has_no_secrets() -> None:
     assert "feishu_app_secret" not in body
     assert "api_key" not in str(body).lower()
     assert body["agent"].startswith("音视频")
+    assert isinstance(body["has_ytdlp"], bool)
+    assert isinstance(body["has_ffmpeg"], bool)
+    assert isinstance(body["has_whisper"], bool)
 
 
 def test_create_and_poll_job() -> None:

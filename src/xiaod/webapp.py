@@ -64,6 +64,9 @@ class ConfigView(BaseModel):
     has_llm: bool
     has_feishu: bool
     has_langsmith: bool
+    has_ytdlp: bool
+    has_ffmpeg: bool
+    has_whisper: bool
     whisper_model: str
     agent: str
     version: str
@@ -159,7 +162,10 @@ def _default_runner(text: str) -> dict[str, Any]:
 
 
 def create_app(runner: Callable[[str], dict[str, Any]] | None = None) -> FastAPI:
+    from xiaod.tools.media import check_tool_stack, ensure_ffmpeg_on_path
+
     settings = get_settings()
+    ensure_ffmpeg_on_path(settings)
     store = JobStore(runner or _default_runner)
     app = FastAPI(title="小D", version="0.1.0")
     app.add_middleware(
@@ -180,10 +186,14 @@ def create_app(runner: Callable[[str], dict[str, Any]] | None = None) -> FastAPI
     @app.get("/api/config", response_model=ConfigView)
     def config() -> ConfigView:
         live = get_settings()
+        stack = check_tool_stack(live)
         return ConfigView(
             has_llm=live.has_llm,
             has_feishu=live.has_feishu,
             has_langsmith=live.has_langsmith,
+            has_ytdlp=bool(stack["yt_dlp"]),
+            has_ffmpeg=bool(stack["ffmpeg"]),
+            has_whisper=bool(stack["faster_whisper"]),
             whisper_model=live.whisper_model,
             agent="音视频转录整理助理（小D）",
             version="0.1.0",

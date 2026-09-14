@@ -5,6 +5,9 @@ const config = ref({
   has_llm: false,
   has_feishu: false,
   has_langsmith: false,
+  has_ytdlp: false,
+  has_ffmpeg: false,
+  has_whisper: false,
   whisper_model: "small",
   agent: "音视频转录整理助理（小D）",
 });
@@ -118,6 +121,9 @@ onUnmounted(() => {
         当收到一个播客 / 视频 / 会议录音链接时，自动下载音频、转录文字、整理成分享式提纯稿，并创建飞书文档交付链接。
       </p>
       <div class="chips">
+        <span :class="['chip', config.has_ytdlp ? 'ok' : 'off']">yt-dlp {{ config.has_ytdlp ? "已安装" : "未安装" }}</span>
+        <span :class="['chip', config.has_ffmpeg ? 'ok' : 'off']">ffmpeg {{ config.has_ffmpeg ? "已安装" : "未安装" }}</span>
+        <span :class="['chip', config.has_whisper ? 'ok' : 'off']">faster-whisper {{ config.has_whisper ? "已安装" : "未安装" }}</span>
         <span :class="['chip', config.has_feishu ? 'ok' : 'off']">飞书 {{ config.has_feishu ? "已接通" : "未配置" }}</span>
         <span :class="['chip', config.has_llm ? 'ok' : 'off']">大模型 {{ config.has_llm ? "已接通" : "规则清洗" }}</span>
         <span :class="['chip', config.has_langsmith ? 'ok' : 'off']">LangSmith {{ config.has_langsmith ? "已接通" : "未配置" }}</span>

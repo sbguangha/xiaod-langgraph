@@ -73,3 +73,25 @@ def test_download_audio_without_ffmpeg_or_file_is_ffmpeg_missing(
     with pytest.raises(media.MediaError) as exc:
         media.download_audio("https://www.bilibili.com/video/BV404", dest)
     assert exc.value.code == "ffmpeg_missing"
+
+
+def test_check_tool_stack_reports_each_tool(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(media, "ytdlp_available", lambda: True)
+    monkeypatch.setattr(media, "whisper_available", lambda: False)
+    monkeypatch.setattr(media, "ffmpeg_path", lambda settings=None: None)
+    stack = media.check_tool_stack()
+    assert stack["yt_dlp"] is True
+    assert stack["ffmpeg"] is False
+    assert stack["faster_whisper"] is False
+    assert stack["ok"] is False
+
+
+def test_check_tool_stack_ok_when_all_present(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = tmp_path / "ffmpeg.exe"
+    fake.write_bytes(b"")
+    monkeypatch.setattr(media, "ytdlp_available", lambda: True)
+    monkeypatch.setattr(media, "whisper_available", lambda: True)
+    monkeypatch.setattr(media, "ffmpeg_path", lambda settings=None: fake)
+    stack = media.check_tool_stack()
+    assert stack["ok"] is True
+    assert stack["ffmpeg_bin"] == str(fake)

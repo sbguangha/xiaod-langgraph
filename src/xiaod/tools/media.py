@@ -55,6 +55,34 @@ def ffmpeg_available(settings: Settings | None = None) -> bool:
     return ffmpeg_path(settings) is not None
 
 
+def ytdlp_available() -> bool:
+    try:
+        import yt_dlp  # noqa: F401
+    except ImportError:
+        return shutil.which("yt-dlp") is not None
+    return True
+
+
+def whisper_available() -> bool:
+    try:
+        import faster_whisper  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def check_tool_stack(settings: Settings | None = None) -> dict[str, bool | str]:
+    ffmpeg = ffmpeg_path(settings)
+    stack = {
+        "yt_dlp": ytdlp_available(),
+        "ffmpeg": ffmpeg is not None,
+        "faster_whisper": whisper_available(),
+        "ffmpeg_bin": str(ffmpeg) if ffmpeg else "",
+    }
+    stack["ok"] = bool(stack["yt_dlp"] and stack["ffmpeg"] and stack["faster_whisper"])
+    return stack
+
+
 def ytdlp_cmd(settings: Settings | None = None) -> list[str]:
     found = shutil.which("yt-dlp")
     cmd = [found] if found else [sys.executable, "-m", "yt_dlp"]

@@ -1786,6 +1786,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "faster-whisper" },
     { name = "langchain" },
     { name = "langchain-openai" },
     { name = "langgraph" },
@@ -1798,9 +1799,6 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-asr = [
-    { name = "faster-whisper" },
-]
 dev = [
     { name = "httpx" },
     { name = "pytest" },
@@ -1809,7 +1807,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.116.0" },
-    { name = "faster-whisper", marker = "extra == 'asr'", specifier = ">=1.1.0" },
+    { name = "faster-whisper", specifier = ">=1.1.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
     { name = "langchain", specifier = ">=0.3.0" },
     { name = "langchain-openai", specifier = ">=0.3.0" },
@@ -1822,7 +1820,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.35.0" },
     { name = "yt-dlp", specifier = ">=2025.1.0" },
 ]
-provides-extras = ["asr", "dev"]
+provides-extras = ["dev"]
 
 [[package]]
 name = "xxhash"

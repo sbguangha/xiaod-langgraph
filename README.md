@@ -15,19 +15,22 @@
 ## 准备
 
 1. 复制 `.env.example` 为 `.env`，填 LangSmith、DeepSeek、飞书应用。
-2. 本机安装 [ffmpeg](https://ffmpeg.org/) 并加入 PATH。
-3. 飞书企业自建应用：开通事件订阅 WebSocket，订阅 `im.message.receive_v1`，开通云文档、协作者、发消息权限，并发布。
-4. 转写：`uv sync --extra asr`
+2. `uv sync --extra dev` 会装上 **yt-dlp** 和 **faster-whisper**。
+3. 本机安装 [ffmpeg](https://ffmpeg.org/)，或把可执行文件路径写到 `.env` 的 `FFMPEG_BIN`。
+4. `uv run xiaod doctor` 确认官方三件套都在。
+5. 飞书企业自建应用：开通事件订阅 WebSocket，订阅 `im.message.receive_v1`，开通云文档、协作者、发消息权限，并发布。
 
 ```powershell
 cd D:\xiaod-langgraph
 uv sync --extra dev
 copy .env.example .env
+uv run xiaod doctor
 ```
 
 ## 命令
 
 ```powershell
+uv run xiaod doctor         # 检查 yt-dlp / ffmpeg / faster-whisper
 uv run xiaod hello          # 写一条 LangSmith hello trace
 uv run xiaod eval           # 本地规则评估（分类 + 文稿门禁）
 uv run xiaod run "请转录 https://www.xiaoyuzhoufm.com/episode/..."

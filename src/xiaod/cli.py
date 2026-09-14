@@ -61,15 +61,45 @@ def _cmd_eval(_args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def _cmd_doctor(_args: argparse.Namespace) -> int:
+    from xiaod.tools.media import check_tool_stack, ensure_ffmpeg_on_path
+
+    settings = get_settings()
+    ensure_ffmpeg_on_path(settings)
+    stack = check_tool_stack(settings)
+    labels = {
+        "yt_dlp": "yt-dlp（下载音频）",
+        "ffmpeg": "ffmpeg（格式转换）",
+        "faster_whisper": "faster-whisper（语音识别）",
+    }
+    for key, label in labels.items():
+        mark = "已安装" if stack[key] else "未安装"
+        print(f"{label}：{mark}")
+    if stack["ffmpeg_bin"]:
+        print(f"ffmpeg 路径：{stack['ffmpeg_bin']}")
+    if stack["ok"]:
+        print("官方三件套已齐，可以处理没有字幕的公开链接。")
+        return 0
+    print("还有工具没装好。先 uv sync，并确认本机有 ffmpeg。")
+    return 1
+
+
 def _cmd_web(args: argparse.Namespace) -> int:
     import uvicorn
 
-    from xiaod.tools.media import ensure_ffmpeg_on_path
+    from xiaod.tools.media import check_tool_stack, ensure_ffmpeg_on_path
     from xiaod.webapp import create_app, frontend_dir
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     settings = get_settings()
     ensure_ffmpeg_on_path(settings)
+    stack = check_tool_stack(settings)
+    logging.getLogger("xiaod.web").info(
+        "tool stack yt-dlp=%s ffmpeg=%s whisper=%s",
+        stack["yt_dlp"],
+        stack["ffmpeg"],
+        stack["faster_whisper"],
+    )
     host = args.host or settings.web_host
     port = args.port or settings.web_port
     dist = frontend_dir() / "dist"
@@ -93,6 +123,8 @@ def build_parser() -> argparse.ArgumentParser:
     hello.set_defaults(func=_cmd_hello)
     ev = sub.add_parser("eval", help="跑本地规则评估")
     ev.set_defaults(func=_cmd_eval)
+    doctor = sub.add_parser("doctor", help="检查 yt-dlp / ffmpeg / faster-whisper")
+    doctor.set_defaults(func=_cmd_doctor)
     web = sub.add_parser("web", help="启动 Vue + FastAPI 控制台")
     web.add_argument("--host", default="")
     web.add_argument("--port", type=int, default=0)
