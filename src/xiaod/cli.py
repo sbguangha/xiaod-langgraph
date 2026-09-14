@@ -106,7 +106,7 @@ def _cmd_web(args: argparse.Namespace) -> int:
     print(f"小D 控制台：http://{host}:{port}")
     if not dist.is_dir():
         print("还没有打包前端。另开窗口执行：cd web && npm install && npm run dev")
-    uvicorn.run(create_app(), host=host, port=port, log_level="info")
+    uvicorn.run(create_app(persist=True), host=host, port=port, log_level="info")
     return 0
 
 

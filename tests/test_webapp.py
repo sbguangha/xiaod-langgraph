@@ -1,8 +1,10 @@
+import json
 import threading
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from xiaod.messages import ASK_UNSUPPORTED_SOCIAL, WEB_BUSY, WEB_EMPTY, WEB_INTERRUPTED
+from xiaod.messages import ASK_UNSUPPORTED_SOCIAL, WEB_BUSY, WEB_EMPTY, WEB_INTERRUPTED, WEB_STOPPED
 from xiaod.nodes.xiaod_nodes import job_dir_name
 from xiaod.webapp import create_app
 
@@ -121,6 +123,111 @@ def test_poll_sees_mid_progress() -> None:
         threading.Event().wait(0.05)
     assert body["status"] == "done"
     assert body["progress"] == 100
+
+
+def test_jobs_reload_from_disk(tmp_path: Path) -> None:
+    path = tmp_path / "console_jobs.json"
+    path.write_text(
+        json.dumps(
+            {
+                "jobs": [
+                    {
+                        "id": "keep123abc",
+                        "text": "请转录 https://www.bilibili.com/video/BV1xx411c7mD",
+                        "status": "done",
+                        "stage": "已交付",
+                        "reply": "整理完成，文档已创建。请点开确认目录和权限是否正常。",
+                        "progress": 100,
+                        "title": "整理稿",
+                        "feishu_url": "https://feishu.cn/docx/abc",
+                        "article": "## 访谈里的判断",
+                        "used_subtitle": True,
+                        "permission_granted": True,
+                        "errors": [],
+                        "created_at": "2026-09-14T00:00:00+00:00",
+                        "updated_at": "2026-09-14T00:01:00+00:00",
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    client = TestClient(create_app(runner=lambda text: {"status": "done"}, persist=path))
+    listed = client.get("/api/jobs").json()
+    assert listed[0]["id"] == "keep123abc"
+    assert listed[0]["feishu_url"].startswith("https://")
+    assert listed[0]["progress"] == 100
+    detail = client.get("/api/jobs/keep123abc").json()
+    assert detail["title"] == "整理稿"
+
+
+def test_running_job_resumes_after_reload(tmp_path: Path) -> None:
+    path = tmp_path / "console_jobs.json"
+    path.write_text(
+        json.dumps(
+            {
+                "jobs": [
+                    {
+                        "id": "run123abcde",
+                        "text": "请转录 https://www.bilibili.com/video/BV1xx411c7mD",
+                        "status": "running",
+                        "stage": "正在转写",
+                        "reply": "正在转写，大约已完成 3/30 分钟。",
+                        "progress": 40,
+                        "title": "",
+                        "feishu_url": "",
+                        "article": "",
+                        "used_subtitle": False,
+                        "permission_granted": False,
+                        "errors": [],
+                        "created_at": "2026-09-14T00:00:00+00:00",
+                        "updated_at": "2026-09-14T00:01:00+00:00",
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    seen: list[bool] = []
+
+    def runner(text: str, thread_id: str = "", resume: bool = False) -> dict:
+        seen.append(resume)
+        return {"status": "done", "reply_message": "整理完成，文档已创建。请点开确认目录和权限是否正常。"}
+
+    client = TestClient(create_app(runner=runner, persist=path))
+    body = client.get("/api/jobs/run123abcde").json()
+    for _ in range(40):
+        if body["status"] != "running":
+            break
+        threading.Event().wait(0.05)
+        body = client.get("/api/jobs/run123abcde").json()
+    assert True in seen
+    assert body["status"] == "done"
+    assert body["progress"] == 100
+
+
+def test_stop_job_releases_queue() -> None:
+    started = threading.Event()
+    release = threading.Event()
+
+    def blocked(text: str) -> dict:
+        started.set()
+        release.wait(timeout=2)
+        return {"status": "done", "reply_message": "好了"}
+
+    client = TestClient(create_app(runner=blocked))
+    first = client.post("/api/jobs", json={"text": "请转录 https://youtu.be/abc"})
+    job_id = first.json()["id"]
+    assert started.wait(timeout=1)
+    stopped = client.post(f"/api/jobs/{job_id}/stop")
+    assert stopped.status_code == 200
+    assert stopped.json()["status"] == "stopped"
+    assert stopped.json()["reply"] == WEB_STOPPED
+    second = client.post("/api/jobs", json={"text": "请转录 https://youtu.be/def"})
+    assert second.status_code == 200
+    release.set()
 
 
 def test_runner_exception_is_human() -> None:

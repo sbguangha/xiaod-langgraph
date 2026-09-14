@@ -59,19 +59,61 @@ def get_app():
     return build_parent_graph(checkpointer)
 
 
+def thread_config(thread_id: str, state: JobState | None = None) -> dict:
+    return {
+        "configurable": {"thread_id": thread_id},
+        "metadata": trace_metadata(state) if state else {},
+        "run_name": (state or {}).get("route") or "xiaod",
+    }
+
+
+def read_thread(thread_id: str) -> JobState | None:
+    if not thread_id:
+        return None
+    try:
+        snap = get_app().get_state({"configurable": {"thread_id": thread_id}})
+    except Exception:
+        return None
+    values = getattr(snap, "values", None)
+    if not isinstance(values, dict) or not values:
+        return None
+    return dict(values)
+
+
+def thread_is_open(thread_id: str) -> bool:
+    if not thread_id:
+        return False
+    try:
+        snap = get_app().get_state({"configurable": {"thread_id": thread_id}})
+    except Exception:
+        return False
+    return bool(getattr(snap, "next", ()))
+
+
 @traceable(name="xiaod")
 def run_job(state: JobState, *, thread_id: str | None = None) -> JobState:
     configure_langsmith()
     app = get_app()
-    config = {
-        "configurable": {"thread_id": thread_id or state.get("thread_id") or "cli"},
-        "metadata": trace_metadata(state),
-        "run_name": state.get("route") or "xiaod",
-    }
+    config = thread_config(thread_id or state.get("thread_id") or "cli", state)
     result = app.invoke(state, config=config)
     return result
 
 
-def run_text(text: str, *, open_id: str = "", chat_id: str = "", thread_id: str = "") -> JobState:
-    state = empty_state(text, open_id=open_id, chat_id=chat_id, thread_id=thread_id)
+def run_text(
+    text: str,
+    *,
+    open_id: str = "",
+    chat_id: str = "",
+    thread_id: str = "",
+    resume: bool = False,
+) -> JobState:
+    tid = thread_id or ""
+    if resume and tid:
+        existing = read_thread(tid)
+        if existing:
+            if thread_is_open(tid):
+                result = get_app().invoke(None, thread_config(tid, existing))
+                return dict(result)
+            return existing
+    state = empty_state(text, open_id=open_id, chat_id=chat_id, thread_id=tid)
     return run_job(state, thread_id=state["thread_id"])

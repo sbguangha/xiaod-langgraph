@@ -21,6 +21,8 @@ WEB_BUSY = "上一条任务还在处理。请等它结束后再提交。"
 WEB_EMPTY = "请先粘贴一条公开播客或视频链接。"
 WEB_FAILED = "这次没有处理成功。请换一条公开链接再试。"
 WEB_INTERRUPTED = "这次处理中断了。请用同一条链接再试一次。"
+WEB_STOPPED = "任务已停止。需要同一条链接的话，再提交一次即可。"
+WEB_RESUMED = "服务已恢复，继续处理这条任务。"
 
 
 def user_error(code: str) -> str:

@@ -32,3 +32,22 @@ def test_parent_rejects_douyin() -> None:
 def test_build_parent_graph_compiles() -> None:
     app = build_parent_graph()
     assert app is not None
+
+
+def test_sqlite_memory_roundtrip(tmp_path, monkeypatch) -> None:
+    from xiaod import graph as g
+
+    monkeypatch.setenv("XIAOD_DATA_DIR", str(tmp_path))
+    g.get_app.cache_clear()
+    try:
+        first = g.run_text("https://v.douyin.com/iAbcdefg/", thread_id="web:mem1")
+        stored = g.read_thread("web:mem1")
+        assert stored is not None
+        assert stored["route"] == "human"
+        assert stored["reply_message"] == first["reply_message"]
+        assert "只整理公开播客" in stored["reply_message"]
+        again = g.run_text("ignored", thread_id="web:mem1", resume=True)
+        assert again["reply_message"] == first["reply_message"]
+        assert g.thread_is_open("web:mem1") is False
+    finally:
+        g.get_app.cache_clear()

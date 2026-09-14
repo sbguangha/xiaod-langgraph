@@ -1,5 +1,8 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+
+const JOB_ID_KEY = "xiaod.currentJobId";
+const JOB_CACHE_KEY = "xiaod.currentJob";
 
 const config = ref({
   has_llm: false,
@@ -30,7 +33,7 @@ const currentStep = computed(() => {
   const status = job.value?.status || "";
   const stage = job.value?.stage || "";
   if (!job.value) return -1;
-  if (status === "needs_human" || status === "failed") return -1;
+  if (["needs_human", "failed", "stopped"].includes(status)) return -1;
   if (["已收到", "已分类", "开始处理"].includes(stage)) return 0;
   if (["正在找字幕", "正在下载音频", "已取音频", "已取字幕", "已读本地文件"].includes(stage)) return 1;
   if (["正在转写", "已转写"].includes(stage)) return 2;
@@ -45,6 +48,40 @@ const jobProgress = computed(() => {
   if (Number.isNaN(value)) return 0;
   return Math.max(0, Math.min(100, Math.round(value)));
 });
+
+function readCachedJob() {
+  try {
+    const raw = window.localStorage.getItem(JOB_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.id ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberJob(value) {
+  if (!value?.id) return;
+  window.localStorage.setItem(JOB_ID_KEY, value.id);
+  window.localStorage.setItem(JOB_CACHE_KEY, JSON.stringify(value));
+}
+
+function pickJob(list) {
+  const running = list.find((item) => item.status === "running");
+  if (running) return running;
+  const saved = window.localStorage.getItem(JOB_ID_KEY);
+  if (saved) {
+    const found = list.find((item) => item.id === saved);
+    if (found) return found;
+  }
+  return list[0] || null;
+}
+
+function selectJob(item) {
+  if (!item) return;
+  job.value = item;
+  if (item.text) text.value = item.text;
+}
 
 function friendlyError(payload) {
   if (typeof payload === "string" && payload.trim()) return payload;
@@ -77,6 +114,10 @@ async function refreshList() {
   const res = await fetch("/api/jobs");
   if (!res.ok) return;
   jobs.value = await res.json();
+  if (job.value?.id) {
+    const fresh = jobs.value.find((item) => item.id === job.value.id);
+    if (fresh) job.value = fresh;
+  }
 }
 
 async function submit() {
@@ -93,7 +134,7 @@ async function submit() {
       notice.value = friendlyError(data);
       return;
     }
-    job.value = data;
+    selectJob(data);
     await refreshList();
   } catch {
     notice.value = "暂时连不上控制台，请确认 FastAPI 已启动。";
@@ -102,9 +143,34 @@ async function submit() {
   }
 }
 
+async function stopJob() {
+  if (!job.value?.id || job.value.status !== "running") return;
+  notice.value = "";
+  try {
+    const res = await fetch(`/api/jobs/${job.value.id}/stop`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      notice.value = friendlyError(data);
+      return;
+    }
+    job.value = data;
+    await refreshList();
+  } catch {
+    notice.value = "暂时连不上控制台，请确认 FastAPI 已启动。";
+  }
+}
+
+watch(job, (value) => {
+  if (value?.id) rememberJob(value);
+}, { deep: true });
+
 onMounted(async () => {
+  const cached = readCachedJob();
+  if (cached) job.value = cached;
   await loadConfig();
   await refreshList();
+  const selected = pickJob(jobs.value) || cached;
+  if (selected) selectJob(selected);
   timer = window.setInterval(async () => {
     if (job.value?.id && job.value.status === "running") {
       await refreshJob(job.value.id);
@@ -146,6 +212,14 @@ onUnmounted(() => {
         <textarea v-model="text" rows="5" placeholder="https://www.bilibili.com/video/BVxxxxxxxx" />
         <div class="actions">
           <button :disabled="submitting" @click="submit">开始整理</button>
+          <button
+            v-if="job?.status === 'running'"
+            class="ghost"
+            :disabled="submitting"
+            @click="stopJob"
+          >
+            停止任务
+          </button>
           <p v-if="notice" class="notice">{{ notice }}</p>
         </div>
         <ol class="steps">
@@ -208,7 +282,7 @@ onUnmounted(() => {
     <section class="panel history" v-if="jobs.length">
       <h2>最近任务</h2>
       <ul>
-        <li v-for="item in jobs" :key="item.id" @click="job = item">
+        <li v-for="item in jobs" :key="item.id" @click="selectJob(item)">
           <span>{{ item.stage }}{{ item.status === "running" ? ` · ${item.progress || 0}%` : "" }}</span>
           <em>{{ item.text }}</em>
         </li>
@@ -307,6 +381,12 @@ button {
 button:disabled {
   opacity: 0.6;
   cursor: wait;
+}
+
+button.ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line);
 }
 
 .notice {
