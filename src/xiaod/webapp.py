@@ -215,7 +215,7 @@ def create_app(runner: Callable[[str], dict[str, Any]] | None = None) -> FastAPI
 
         @app.get("/")
         def index() -> FileResponse:
-            return FileResponse(dist / "index.html")
+            return FileResponse(dist / "index.html", media_type="text/html; charset=utf-8")
 
         @app.get("/{page_path:path}")
         def spa(page_path: str) -> FileResponse:

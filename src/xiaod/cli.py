@@ -64,9 +64,12 @@ def _cmd_eval(_args: argparse.Namespace) -> int:
 def _cmd_web(args: argparse.Namespace) -> int:
     import uvicorn
 
+    from xiaod.tools.media import ensure_ffmpeg_on_path
     from xiaod.webapp import create_app, frontend_dir
 
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     settings = get_settings()
+    ensure_ffmpeg_on_path(settings)
     host = args.host or settings.web_host
     port = args.port or settings.web_port
     dist = frontend_dir() / "dist"

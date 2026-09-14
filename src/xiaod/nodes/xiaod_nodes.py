@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import logging
 
 from xiaod.messages import NEED_ASR, NEED_FFMPEG, NEED_FEISHU, eta_notice, format_doc_reply, user_error
 from xiaod.nodes.clean import clean_transcript, qa_share_draft, rule_based_purify
@@ -11,6 +12,8 @@ from xiaod.state import JobState
 from xiaod.tools import lark, media
 from xiaod.tools.llm import purify_share_draft
 from xiaod.tracing import trace_metadata, traceable
+
+logger = logging.getLogger("xiaod.nodes")
 
 
 def job_dir_name(thread_id: str) -> str:
@@ -61,6 +64,7 @@ def fetch_source(state: JobState) -> dict:
     try:
         path, info = media.download_audio(url, dest / "audio")
     except media.MediaError as exc:
+        logger.warning("fetch_source %s: %s", exc.code, exc.detail)
         if exc.code == "ffmpeg_missing":
             return {"errors": ["ffmpeg_missing"], "status": "failed", "reply_message": NEED_FFMPEG}
         return {"errors": ["download_failed"], "status": "failed", "reply_message": user_error("download_failed")}
