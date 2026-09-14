@@ -7,6 +7,7 @@ import logging
 
 from xiaod.messages import NEED_ASR, NEED_FFMPEG, NEED_FEISHU, eta_notice, format_doc_reply, user_error
 from xiaod.nodes.clean import clean_transcript, qa_share_draft, rule_based_purify
+from xiaod.progress import report_progress
 from xiaod.settings import get_settings
 from xiaod.state import JobState
 from xiaod.tools import lark, media
@@ -34,6 +35,7 @@ def fetch_source(state: JobState) -> dict:
     source_type = state.get("source_type") or ""
     if source_type == "local":
         media_path = urls[0] if urls else (state.get("input_text") or "").strip()
+        report_progress(stage="已读本地文件", reply="已读到本地音频，接下来转写。", progress=25)
         return {
             "media_path": media_path,
             "title": Path(media_path).stem,
@@ -53,6 +55,7 @@ def fetch_source(state: JobState) -> dict:
             title = title or str(info.get("title") or "")
         except media.MediaError:
             pass
+        report_progress(stage="已取字幕", reply="已拿到平台字幕，跳过转写，直接整理文稿。", progress=86)
         return {
             "subtitle": subtitle,
             "transcript": clean_transcript(subtitle),
@@ -70,13 +73,15 @@ def fetch_source(state: JobState) -> dict:
         return {"errors": ["download_failed"], "status": "failed", "reply_message": user_error("download_failed")}
     duration = int(info.get("duration") or 0)
     eta = media.estimate_eta_minutes(duration)
+    notice = eta_notice(duration, eta) if duration >= 20 * 60 else "音频已下载，接下来本机转写。"
+    report_progress(stage="已取音频", reply=notice, progress=25)
     return {
         "media_path": str(path),
         "title": str(info.get("title") or title or ""),
         "used_subtitle": False,
         "duration_sec": duration,
         "eta_minutes": eta,
-        "reply_message": eta_notice(duration, eta) if duration >= 20 * 60 else "",
+        "reply_message": notice if duration >= 20 * 60 else "",
         "status": "audio_ready",
     }
 
@@ -84,6 +89,7 @@ def fetch_source(state: JobState) -> dict:
 @traceable(name="xiaod_transcribe")
 def transcribe(state: JobState) -> dict:
     if state.get("used_subtitle") and state.get("transcript"):
+        report_progress(stage="已转写", reply="已有字幕，跳过语音识别。", progress=86)
         return {"status": "transcribed"}
     path = state.get("media_path") or ""
     if not path:
@@ -106,6 +112,7 @@ def transcribe(state: JobState) -> dict:
 
 @traceable(name="xiaod_purify")
 def purify(state: JobState) -> dict:
+    report_progress(stage="正在整理文稿", reply="正在把转写稿整理成分享式提纯稿。", progress=90)
     transcript = state.get("transcript") or ""
     article = purify_share_draft(
         transcript,
@@ -133,6 +140,7 @@ def purify(state: JobState) -> dict:
 
 @traceable(name="xiaod_deliver")
 def deliver_doc(state: JobState) -> dict:
+    report_progress(stage="正在创建飞书文档", reply="正在创建飞书文档并授权。", progress=95)
     settings = get_settings()
     if not state.get("qa_ok"):
         return {"reply_message": user_error("qa_failed"), "status": "failed"}

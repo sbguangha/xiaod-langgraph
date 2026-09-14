@@ -32,12 +32,18 @@ const currentStep = computed(() => {
   if (!job.value) return -1;
   if (status === "needs_human" || status === "failed") return -1;
   if (["已收到", "已分类", "开始处理"].includes(stage)) return 0;
-  if (["已取音频", "已取字幕", "已读本地文件"].includes(stage)) return 1;
-  if (stage === "已转写") return 2;
-  if (stage === "已提纯") return 3;
-  if (status === "done" || status === "needs_feishu") return 4;
+  if (["正在找字幕", "正在下载音频", "已取音频", "已取字幕", "已读本地文件"].includes(stage)) return 1;
+  if (["正在转写", "已转写"].includes(stage)) return 2;
+  if (["正在整理文稿", "已提纯"].includes(stage)) return 3;
+  if (stage === "正在创建飞书文档" || status === "done" || status === "needs_feishu") return 4;
   if (status === "running") return 1;
   return 0;
+});
+
+const jobProgress = computed(() => {
+  const value = Number(job.value?.progress || 0);
+  if (Number.isNaN(value)) return 0;
+  return Math.max(0, Math.min(100, Math.round(value)));
 });
 
 function friendlyError(payload) {
@@ -104,7 +110,7 @@ onMounted(async () => {
       await refreshJob(job.value.id);
     }
     await refreshList();
-  }, 2000);
+  }, 1000);
 });
 
 onUnmounted(() => {
@@ -149,7 +155,19 @@ onUnmounted(() => {
         </ol>
         <div v-if="job" class="result">
           <p class="stage">{{ job.stage }}</p>
-          <p class="reply">{{ job.reply }}</p>
+          <div
+            v-if="job.status === 'running'"
+            class="meter"
+            role="progressbar"
+            :aria-valuemin="0"
+            :aria-valuemax="100"
+            :aria-valuenow="jobProgress"
+            :style="{ '--pct': `${jobProgress}%` }"
+          >
+            <div class="meter-fill" />
+          </div>
+          <p v-if="job.status === 'running'" class="hint">{{ jobProgress }}% · {{ job.reply }}</p>
+          <p v-else class="reply">{{ job.reply }}</p>
           <p v-if="job.title"><strong>标题</strong> {{ job.title }}</p>
           <p v-if="job.feishu_url">
             <strong>文档</strong>
@@ -191,7 +209,7 @@ onUnmounted(() => {
       <h2>最近任务</h2>
       <ul>
         <li v-for="item in jobs" :key="item.id" @click="job = item">
-          <span>{{ item.stage }}</span>
+          <span>{{ item.stage }}{{ item.status === "running" ? ` · ${item.progress || 0}%` : "" }}</span>
           <em>{{ item.text }}</em>
         </li>
       </ul>
@@ -320,6 +338,21 @@ button:disabled {
 
 .result {
   margin-top: 18px;
+}
+
+.meter {
+  margin: 12px 0 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--chip);
+  overflow: hidden;
+}
+
+.meter-fill {
+  height: 100%;
+  width: var(--pct, 0%);
+  background: var(--accent);
+  transition: width 0.4s ease;
 }
 
 .stage {

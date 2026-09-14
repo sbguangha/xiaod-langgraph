@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 
+from xiaod.progress import report_progress
 from xiaod.settings import Settings, get_settings
 from xiaod.tracing import traceable
 
@@ -115,6 +116,7 @@ def probe_media(url: str) -> dict:
 
 @traceable(run_type="tool", name="yt_dlp_subtitles")
 def fetch_subtitles(url: str, dest_dir: Path) -> tuple[str, str]:
+    report_progress(stage="正在找字幕", reply="先找平台字幕，没有字幕再下载音频转写。", progress=8)
     dest_dir.mkdir(parents=True, exist_ok=True)
     outtmpl = str(dest_dir / "%(id)s")
     cmd = ytdlp_cmd() + [
@@ -148,6 +150,7 @@ def fetch_subtitles(url: str, dest_dir: Path) -> tuple[str, str]:
 @traceable(run_type="tool", name="yt_dlp_audio")
 def download_audio(url: str, dest_dir: Path, settings: Settings | None = None) -> tuple[Path, dict]:
     settings = settings or get_settings()
+    report_progress(stage="正在下载音频", reply="没有现成字幕，正在下载音频并转成可转写的格式。", progress=15)
     dest_dir.mkdir(parents=True, exist_ok=True)
     outtmpl = str(dest_dir / "%(id)s.%(ext)s")
     cmd = ytdlp_cmd(settings) + [
@@ -184,8 +187,9 @@ def split_audio(path: Path, dest_dir: Path, *, segment_sec: int = 30 * 60, setti
     settings = settings or get_settings()
     dest_dir.mkdir(parents=True, exist_ok=True)
     pattern = dest_dir / "seg_%03d.mp3"
+    ffmpeg = ffmpeg_path(settings)
     cmd = [
-        settings.ffmpeg_bin,
+        str(ffmpeg) if ffmpeg else settings.ffmpeg_bin,
         "-y",
         "-i",
         str(path),
@@ -211,9 +215,41 @@ def transcribe_audio(path: Path, settings: Settings | None = None) -> str:
         from faster_whisper import WhisperModel
     except ImportError as exc:
         raise MediaError("asr_missing") from exc
+    report_progress(stage="正在转写", reply="正在加载语音识别模型。第一次会下载模型，请稍等。", progress=28)
     model = WhisperModel(settings.whisper_model, device="cpu", compute_type="int8")
-    segments, _info = model.transcribe(str(path), vad_filter=True)
-    lines = [segment.text.strip() for segment in segments if segment.text.strip()]
+    segments, info = model.transcribe(str(path), vad_filter=True)
+    duration = float(getattr(info, "duration", 0) or 0)
+    total_min = max(1, int(duration // 60)) if duration else 0
+    report_progress(
+        stage="正在转写",
+        reply="正在本机转写，CPU 上会比较慢，页面会显示已完成的分钟数。"
+        if not total_min
+        else f"正在本机转写，音频大约 {total_min} 分钟。CPU 上通常要再等一段时间。",
+        progress=30,
+    )
+    lines: list[str] = []
+    last_pct = 29
+    for segment in segments:
+        text = (getattr(segment, "text", "") or "").strip()
+        if text:
+            lines.append(text)
+        end = float(getattr(segment, "end", 0) or 0)
+        if duration > 0:
+            pct = 30 + int(min(end, duration) / duration * 55)
+        else:
+            pct = min(80, last_pct + 1)
+        if pct < last_pct + 2:
+            continue
+        last_pct = min(84, pct)
+        done_min = int(end // 60)
+        reply = (
+            f"正在转写，大约已完成 {done_min}/{total_min} 分钟。"
+            if total_min
+            else "正在转写。"
+        )
+        report_progress(stage="正在转写", reply=reply, progress=last_pct)
+        logger.info("transcribe %s", reply)
     if not lines:
         raise MediaError("asr_failed")
+    report_progress(stage="已转写", reply="语音识别完成，接下来整理成提纯稿。", progress=86)
     return "\n".join(lines)

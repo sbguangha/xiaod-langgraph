@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from xiaod.messages import WEB_BUSY, WEB_EMPTY, WEB_FAILED, WEB_INTERRUPTED
+from xiaod.progress import reset_progress_handler, set_progress_handler
 from xiaod.settings import _project_root, get_settings
 
 TERMINAL = frozenset({"done", "failed", "needs_human", "needs_feishu", "idle"})
@@ -50,6 +51,7 @@ class JobView(BaseModel):
     status: str
     stage: str
     reply: str
+    progress: int = 0
     title: str
     feishu_url: str
     article: str
@@ -101,6 +103,7 @@ class JobStore:
                 "status": "running",
                 "stage": _stage_label("ack"),
                 "reply": "已收到，开始处理。",
+                "progress": 0,
                 "title": "",
                 "feishu_url": "",
                 "article": "",
@@ -132,19 +135,37 @@ class JobStore:
             job["updated_at"] = _now()
 
     def _run(self, job_id: str, text: str) -> None:
+        def on_progress(fields: dict[str, str | int]) -> None:
+            patch: dict[str, str | int] = {}
+            if "stage" in fields:
+                patch["stage"] = str(fields["stage"])
+            if "reply" in fields:
+                patch["reply"] = str(fields["reply"])
+            if "progress" in fields:
+                patch["progress"] = int(fields["progress"])
+            if patch:
+                self._apply(job_id, **patch)
+
+        token = set_progress_handler(on_progress)
         try:
             result = self._runner(text)
         except Exception:
             logger.exception("job %s failed", job_id)
             self._apply(job_id, status="failed", stage=_stage_label("failed"), reply=WEB_INTERRUPTED)
             return
+        finally:
+            reset_progress_handler(token)
         status = str(result.get("status") or "failed")
         if status == "qa_failed":
             status = "failed"
+        final = status if status in TERMINAL else "failed"
+        extra: dict[str, Any] = {}
+        if final == "done":
+            extra["progress"] = 100
         self._apply(
             job_id,
-            status=status if status in TERMINAL else "failed",
-            stage=_stage_label(status if status in TERMINAL else "failed"),
+            status=final,
+            stage=_stage_label(final),
             reply=str(result.get("reply_message") or WEB_FAILED),
             title=str(result.get("title") or ""),
             feishu_url=str(result.get("feishu_url") or ""),
@@ -152,6 +173,7 @@ class JobStore:
             used_subtitle=bool(result.get("used_subtitle")),
             permission_granted=bool(result.get("permission_granted")),
             errors=[str(item) for item in (result.get("errors") or [])],
+            **extra,
         )
 
 

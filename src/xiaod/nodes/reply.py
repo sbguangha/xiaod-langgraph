@@ -10,6 +10,7 @@ from xiaod.messages import (
     STATUS_IDLE,
     STATUS_RUNNING,
 )
+from xiaod.progress import report_progress
 from xiaod.state import JobState
 
 
@@ -43,5 +44,6 @@ def status_node(state: JobState) -> dict:
 
 def ack_route(state: JobState) -> dict:
     if state.get("route") == "xiaod":
+        report_progress(stage="开始处理", reply=ACK_MEDIA, progress=5)
         return {"reply_message": ACK_MEDIA, "status": "ack"}
     return {}

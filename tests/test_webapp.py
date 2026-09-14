@@ -90,6 +90,39 @@ def test_job_dir_name_is_windows_safe(tmp_path) -> None:
     assert created.is_dir()
 
 
+def test_poll_sees_mid_progress() -> None:
+    from xiaod.progress import report_progress
+
+    started = threading.Event()
+    release = threading.Event()
+
+    def runner(text: str) -> dict:
+        report_progress(stage="正在转写", reply="正在转写，大约已完成 3/30 分钟。", progress=40)
+        started.set()
+        release.wait(timeout=2)
+        return {"status": "done", "reply_message": "整理完成，文档已创建。请点开确认目录和权限是否正常。"}
+
+    client = TestClient(create_app(runner=runner))
+    created = client.post("/api/jobs", json={"text": "请转录 https://www.bilibili.com/video/BV1xx411c7mD"})
+    job_id = created.json()["id"]
+    assert created.status_code == 200
+    assert started.wait(timeout=1)
+    mid = client.get(f"/api/jobs/{job_id}").json()
+    assert mid["status"] == "running"
+    assert mid["stage"] == "正在转写"
+    assert mid["progress"] == 40
+    assert "已完成 3/30 分钟" in mid["reply"]
+    release.set()
+    body = mid
+    for _ in range(40):
+        body = client.get(f"/api/jobs/{job_id}").json()
+        if body["status"] != "running":
+            break
+        threading.Event().wait(0.05)
+    assert body["status"] == "done"
+    assert body["progress"] == 100
+
+
 def test_runner_exception_is_human() -> None:
     def boom(text: str) -> dict:
         raise RuntimeError("directory name is invalid")

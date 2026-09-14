@@ -1,4 +1,5 @@
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -95,3 +96,62 @@ def test_check_tool_stack_ok_when_all_present(tmp_path: Path, monkeypatch: pytes
     stack = media.check_tool_stack()
     assert stack["ok"] is True
     assert stack["ffmpeg_bin"] == str(fake)
+
+
+def test_transcribe_audio_reads_whisper_segments(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    clip = tmp_path / "talk.mp3"
+    clip.write_bytes(b"audio")
+
+    class FakeModel:
+        def __init__(self, *args, **kwargs) -> None:
+            self.kwargs = kwargs
+
+        def transcribe(self, path: str, vad_filter: bool = True):
+            assert path == str(clip)
+            assert vad_filter is True
+            segment = type("Segment", (), {"text": "  亦仁说生财有术。  "})()
+            return [segment], None
+
+    fake_mod = type(sys)("faster_whisper")
+    fake_mod.WhisperModel = FakeModel
+    monkeypatch.setitem(sys.modules, "faster_whisper", fake_mod)
+
+    text = media.transcribe_audio(clip)
+    assert "亦仁" in text
+
+
+def test_transcribe_audio_reports_segment_progress(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from xiaod.progress import reset_progress_handler, set_progress_handler
+
+    clip = tmp_path / "talk.mp3"
+    clip.write_bytes(b"audio")
+    seen: list[dict] = []
+    token = set_progress_handler(seen.append)
+
+    class FakeModel:
+        def __init__(self, *args, **kwargs) -> None:
+            return None
+
+        def transcribe(self, path: str, vad_filter: bool = True):
+            segments = [
+                type("Segment", (), {"text": "第一段。", "end": 180})(),
+                type("Segment", (), {"text": "第二段。", "end": 420})(),
+            ]
+            info = type("Info", (), {"duration": 600})()
+            return segments, info
+
+    fake_mod = type(sys)("faster_whisper")
+    fake_mod.WhisperModel = FakeModel
+    monkeypatch.setitem(sys.modules, "faster_whisper", fake_mod)
+    try:
+        text = media.transcribe_audio(clip)
+    finally:
+        reset_progress_handler(token)
+
+    assert "第一段" in text
+    replies = [str(item.get("reply") or "") for item in seen]
+    assert any("已完成 3/10 分钟" in reply for reply in replies)
+    percents = [int(item["progress"]) for item in seen if "progress" in item]
+    assert percents[0] >= 28
+    assert percents[-1] == 86
+    assert any(30 < value < 86 for value in percents)
