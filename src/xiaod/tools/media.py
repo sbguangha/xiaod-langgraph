@@ -26,6 +26,65 @@ class MediaError(Exception):
         super().__init__(code)
 
 
+_LOGIN_MARKERS = (
+    "sign in",
+    "login required",
+    "log in",
+    "logged in",
+    "private video",
+    "members-only",
+    "members only",
+    "premium",
+    "paid content",
+    "join this channel",
+    "cookies",
+    "authentication",
+    "unauthorized",
+    "http error 401",
+    "401 unauthorized",
+    "登录",
+    "登陆",
+    "大会员",
+    "会员专属",
+    "充电专属",
+    "需要登录",
+    "请登录",
+)
+_REGION_MARKERS = (
+    "not available in your country",
+    "unavailable in your country",
+    "blocked in your country",
+    "geo-restricted",
+    "georestricted",
+    "geo restricted",
+    "not made this video available in your country",
+    "你所在的地区",
+    "所在地区",
+    "国家/地区",
+)
+_NO_AUDIO_MARKERS = (
+    "no audio",
+    "does not contain audio",
+    "video only",
+    "没有音频",
+    "无音频",
+    "没有音轨",
+)
+
+
+def classify_ytdlp_error(detail: str) -> str:
+    blob = (detail or "").lower()
+    if not blob.strip():
+        return "no_audio"
+    if any(marker in blob for marker in _REGION_MARKERS):
+        return "region_blocked"
+    if any(marker in blob for marker in _LOGIN_MARKERS):
+        return "login_required"
+    if any(marker in blob for marker in _NO_AUDIO_MARKERS):
+        return "no_audio"
+    return "platform_blocked"
+
+
 def _run(args: list[str], *, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(args, cwd=cwd, check=False, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
@@ -169,7 +228,8 @@ def download_audio(url: str, dest_dir: Path, settings: Settings | None = None) -
     if not audio:
         if not ffmpeg_available(settings):
             raise MediaError("ffmpeg_missing")
-        raise MediaError("download_failed", (result.stderr or "no audio file")[-400:])
+        detail = (result.stderr or "").strip()[-400:]
+        raise MediaError(classify_ytdlp_error(detail), detail)
     try:
         info = probe_media(url)
     except MediaError:

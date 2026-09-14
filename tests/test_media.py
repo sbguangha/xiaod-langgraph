@@ -56,7 +56,7 @@ def test_download_audio_without_file_is_download_failed(
     )
     with pytest.raises(media.MediaError) as exc:
         media.download_audio("https://www.bilibili.com/video/BV404", dest)
-    assert exc.value.code == "download_failed"
+    assert exc.value.code == "platform_blocked"
     assert "换一条公开链接" not in exc.value.detail
 
 
@@ -96,6 +96,15 @@ def test_check_tool_stack_ok_when_all_present(tmp_path: Path, monkeypatch: pytes
     stack = media.check_tool_stack()
     assert stack["ok"] is True
     assert stack["ffmpeg_bin"] == str(fake)
+
+
+def test_classify_ytdlp_error_splits_reasons() -> None:
+    assert media.classify_ytdlp_error("Sign in to confirm your age") == "login_required"
+    assert media.classify_ytdlp_error("ERROR: 需要登录后观看") == "login_required"
+    assert media.classify_ytdlp_error("The uploader has not made this video available in your country") == "region_blocked"
+    assert media.classify_ytdlp_error("HTTP Error 404: Not Found") == "platform_blocked"
+    assert media.classify_ytdlp_error("Requested format is video only; no audio") == "no_audio"
+    assert media.classify_ytdlp_error("") == "no_audio"
 
 
 def test_transcribe_audio_reads_whisper_segments(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
