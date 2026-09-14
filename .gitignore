@@ -1,0 +1,32 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+venv/
+
+# Secrets and local runtime
+.env
+启动命令.md
+data/
+*.db
+checkpoints.db
+
+# Frontend
+web/node_modules/
+web/dist/
+
+# Models / media cache
+.cache/
+downloads/
+*.mp3
+*.m4a
+*.wav
+*.mp4
+*.vtt
+*.srt
