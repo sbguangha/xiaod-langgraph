@@ -11,6 +11,15 @@ from xiaod.progress import report_progress
 from xiaod.settings import get_settings
 from xiaod.state import JobState
 from xiaod.tools import lark, media
+from xiaod.tools.catalog import (
+    create_feishu_doc_tool,
+    download_audio_tool,
+    fetch_subtitles_tool,
+    grant_feishu_acl_tool,
+    probe_media_tool,
+    split_audio_tool,
+    transcribe_audio_tool,
+)
 from xiaod.tools.llm import purify_share_draft
 from xiaod.tracing import trace_metadata, traceable
 
@@ -46,11 +55,13 @@ def fetch_source(state: JobState) -> dict:
         return {"errors": ["download_failed"], "status": "failed", "reply_message": user_error("download_failed")}
     url = urls[0]
     dest = _work_dir(state)
-    subtitle, title = media.fetch_subtitles(url, dest / "subs")
+    fetched = fetch_subtitles_tool.invoke({"url": url, "dest_dir": str(dest / "subs")})
+    subtitle = str(fetched.get("text") or "")
+    title = str(fetched.get("title") or "")
     if subtitle.strip():
         duration = 0
         try:
-            info = media.probe_media(url)
+            info = probe_media_tool.invoke({"url": url})
             duration = int(info.get("duration") or 0)
             title = title or str(info.get("title") or "")
         except media.MediaError:
@@ -65,19 +76,19 @@ def fetch_source(state: JobState) -> dict:
             "status": "subtitle_ready",
         }
     try:
-        path, info = media.download_audio(url, dest / "audio")
+        payload = download_audio_tool.invoke({"url": url, "dest_dir": str(dest / "audio")})
     except media.MediaError as exc:
         logger.warning("fetch_source %s: %s", exc.code, exc.detail)
         if exc.code == "ffmpeg_missing":
             return {"errors": ["ffmpeg_missing"], "status": "failed", "reply_message": NEED_FFMPEG}
-        return {"errors": ["download_failed"], "status": "failed", "reply_message": user_error("download_failed")}
-    duration = int(info.get("duration") or 0)
+        return {"errors": [exc.code], "status": "failed", "reply_message": user_error(exc.code)}
+    duration = int(payload.get("duration") or 0)
     eta = media.estimate_eta_minutes(duration)
     notice = eta_notice(duration, eta) if duration >= 20 * 60 else "音频已下载，接下来本机转写。"
     report_progress(stage="已取音频", reply=notice, progress=25)
     return {
-        "media_path": str(path),
-        "title": str(info.get("title") or title or ""),
+        "media_path": str(payload.get("path") or ""),
+        "title": str(payload.get("title") or title or ""),
         "used_subtitle": False,
         "duration_sec": duration,
         "eta_minutes": eta,
@@ -95,13 +106,13 @@ def transcribe(state: JobState) -> dict:
     if not path:
         return {"errors": ["asr_failed"], "status": "failed", "reply_message": user_error("asr_failed")}
     audio = Path(path)
-    parts = [audio]
+    parts = [str(audio)]
     if int(state.get("duration_sec") or 0) >= 2 * 60 * 60:
-        parts = media.split_audio(audio, _work_dir(state) / "segments")
+        parts = split_audio_tool.invoke({"path": str(audio), "dest_dir": str(_work_dir(state) / "segments")})
     texts: list[str] = []
     try:
         for part in parts:
-            texts.append(media.transcribe_audio(part))
+            texts.append(transcribe_audio_tool.invoke({"path": str(part)}))
     except media.MediaError as exc:
         if exc.code == "asr_missing":
             return {"errors": ["asr_missing"], "status": "failed", "reply_message": NEED_ASR}
@@ -152,8 +163,12 @@ def deliver_doc(state: JobState) -> dict:
             "status": "needs_feishu",
         }
     try:
-        created = lark.create_markdown_doc(title, state.get("article") or "")
-        granted = lark.grant_doc_permission(created["document_id"], state.get("open_id") or "")
+        created = create_feishu_doc_tool.invoke(
+            {"title": title, "markdown": state.get("article") or ""}
+        )
+        granted = grant_feishu_acl_tool.invoke(
+            {"document_id": created["document_id"], "open_id": state.get("open_id") or ""}
+        )
     except lark.LarkError:
         return {"errors": ["feishu_failed"], "status": "failed", "reply_message": user_error("feishu_failed")}
     return {
