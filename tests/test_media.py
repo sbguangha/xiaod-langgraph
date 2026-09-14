@@ -118,7 +118,7 @@ def test_transcribe_audio_reads_whisper_segments(tmp_path: Path, monkeypatch: py
         def transcribe(self, path: str, vad_filter: bool = True):
             assert path == str(clip)
             assert vad_filter is True
-            segment = type("Segment", (), {"text": "  亦仁说生财有术。  "})()
+            segment = type("Segment", (), {"text": "  嘉宾说分享式提纯稿。  "})()
             return [segment], None
 
     fake_mod = type(sys)("faster_whisper")
@@ -126,7 +126,7 @@ def test_transcribe_audio_reads_whisper_segments(tmp_path: Path, monkeypatch: py
     monkeypatch.setitem(sys.modules, "faster_whisper", fake_mod)
 
     text = media.transcribe_audio(clip)
-    assert "亦仁" in text
+    assert "分享式提纯稿" in text
 
 
 def test_transcribe_audio_reports_segment_progress(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -187,7 +187,7 @@ onUnmounted(() => {
 <template>
   <main class="page">
     <header class="hero">
-      <p class="kicker">航海 10096 · 官方小 D</p>
+      <p class="kicker">LangGraph · 小 D</p>
       <h1>音视频转录整理助理</h1>
       <p class="lead">
         当收到一个公开播客或视频链接时，自动下载音频、转录文字、整理成分享式提纯稿，并创建飞书文档交付链接。
@@ -258,7 +258,7 @@ onUnmounted(() => {
           <li>工具：LangGraph 编排，yt-dlp + ffmpeg 取音频，faster-whisper 转写，飞书创建文档并授权。</li>
           <li>入口：本页控制台，或飞书 Bot 私聊发链接。</li>
         </ul>
-        <h3>7 条验收</h3>
+        <h3>验收标准</h3>
         <ol class="checks">
           <li>能接收公开播客 / 视频链接</li>
           <li>能下载或拿到音频 / 字幕</li>

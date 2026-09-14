@@ -28,7 +28,7 @@ def test_create_and_poll_job() -> None:
         "reply_message": "整理完成，文档已创建。请点开确认目录和权限是否正常。",
         "title": "整理稿",
         "feishu_url": "https://feishu.cn/docx/abc",
-        "article": "## 访谈里的判断\n亦仁说生财有术要做分享式提纯稿。",
+        "article": "## 访谈里的判断\n嘉宾说分享式提纯稿。",
         "used_subtitle": True,
         "permission_granted": True,
         "errors": [],

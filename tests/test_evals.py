@@ -3,7 +3,7 @@ from xiaod.evals.evaluators import evaluate_job, eval_has_feishu_url, eval_no_se
 from xiaod.tools.lark import _markdown_blocks, document_title
 
 
-def test_dataset_covers_voyage_shapes() -> None:
+def test_dataset_covers_media_shapes() -> None:
     ids = {case["id"] for case in SAMPLE_CASES}
     assert "xiaoyuzhou-20m" in ids
     assert "bilibili-short" in ids
@@ -20,7 +20,7 @@ def test_local_eval_classifies_samples() -> None:
 
 
 def test_article_evaluators() -> None:
-    good = "## 访谈里的判断\n亦仁说生财有术要做分享式提纯稿，并举了小宇宙的例子。" * 2
+    good = "## 访谈里的判断\n嘉宾说分享式提纯稿，并举了小宇宙的例子。" * 2
     assert eval_not_summary(good)
     assert not eval_has_feishu_url({"feishu_url": ""})
     assert eval_has_feishu_url({"feishu_url": "https://feishu.cn/docx/abc"})
@@ -34,7 +34,7 @@ def test_doc_title_format() -> None:
 
 
 def test_markdown_blocks_use_sdk_types() -> None:
-    blocks = _markdown_blocks("## 访谈\n亦仁说生财有术要做分享式提纯稿。")
+    blocks = _markdown_blocks("## 访谈\n嘉宾说分享式提纯稿。")
     assert len(blocks) == 2
     assert blocks[0].block_type == 4
     assert blocks[0].heading2.elements[0].text_run.content == "访谈"

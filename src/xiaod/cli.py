@@ -78,7 +78,7 @@ def _cmd_doctor(_args: argparse.Namespace) -> int:
     if stack["ffmpeg_bin"]:
         print(f"ffmpeg 路径：{stack['ffmpeg_bin']}")
     if stack["ok"]:
-        print("官方三件套已齐，可以处理没有字幕的公开链接。")
+        print("yt-dlp、ffmpeg、faster-whisper 都已就绪，可以处理没有字幕的公开链接。")
         return 0
     print("还有工具没装好。先 uv sync，并确认本机有 ffmpeg。")
     return 1

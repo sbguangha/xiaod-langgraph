@@ -36,11 +36,11 @@ def test_fetch_source_uses_login_error_copy(monkeypatch, tmp_path) -> None:
 def test_transcribe_uses_local_whisper(monkeypatch, tmp_path) -> None:
     audio = tmp_path / "talk.mp3"
     audio.write_bytes(b"audio")
-    monkeypatch.setattr(media, "transcribe_audio", lambda path: "亦仁说生财有术要做分享式提纯稿。")
+    monkeypatch.setattr(media, "transcribe_audio", lambda path: "嘉宾说分享式提纯稿。")
     state = empty_state("本地")
     state["media_path"] = str(audio)
     state["used_subtitle"] = False
     state["duration_sec"] = 12
     out = transcribe(state)
     assert out["status"] == "transcribed"
-    assert "亦仁" in out["transcript"]
+    assert "分享式提纯稿" in out["transcript"]
