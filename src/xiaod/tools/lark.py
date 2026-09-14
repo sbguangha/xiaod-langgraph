@@ -1,18 +1,14 @@
-"""Feishu document, ACL, and Bitable helpers."""
+"""Feishu document and ACL helpers."""
 
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
 from typing import Any
-import json
 import re
 import subprocess
 
 from xiaod.settings import Settings, get_settings
 from xiaod.tracing import traceable
-
-LOCAL_CONFIG_NAME = "local.json"
 
 
 class LarkError(Exception):
@@ -20,25 +16,6 @@ class LarkError(Exception):
         self.code = code
         self.message = message
         super().__init__(message or code)
-
-
-def _config_path(settings: Settings) -> Path:
-    return settings.data_dir / LOCAL_CONFIG_NAME
-
-
-def load_local_config(settings: Settings | None = None) -> dict[str, Any]:
-    settings = settings or get_settings()
-    path = _config_path(settings)
-    if not path.exists():
-        return {}
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def save_local_config(data: dict[str, Any], settings: Settings | None = None) -> None:
-    settings = settings or get_settings()
-    path = _config_path(settings)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def document_title(platform: str, title: str, when: date | None = None) -> str:
@@ -189,82 +166,3 @@ def _grant_via_cli(document_id: str, open_id: str) -> bool:
     except FileNotFoundError:
         return False
     return result.returncode == 0
-
-
-@traceable(run_type="tool", name="lark_bitable_upsert")
-def archive_social_row(item: dict[str, Any], settings: Settings | None = None) -> str:
-    settings = settings or get_settings()
-    if not settings.has_feishu:
-        raise LarkError("missing_app")
-    app_token, table_id = _ensure_bitable(settings)
-    from lark_oapi.api.bitable.v1 import AppTableRecord, CreateAppTableRecordRequest
-
-    client = _client(settings)
-    url = str(item.get("url") or "")
-    fields = {
-        "平台": item.get("platform") or "",
-        "标题": item.get("title") or "",
-        "作者": item.get("author") or "",
-        "链接": {"text": url, "link": url} if url else "",
-        "摘要": (item.get("summary") or "")[:2000],
-        "采集日": date.today().isoformat(),
-        "cache_url": item.get("cache_url") or "",
-    }
-    req = (
-        CreateAppTableRecordRequest.builder()
-        .app_token(app_token)
-        .table_id(table_id)
-        .request_body(AppTableRecord.builder().fields(fields).build())
-        .build()
-    )
-    resp = client.bitable.v1.app_table_record.create(req)
-    if not resp.success() or not resp.data or not resp.data.record:
-        raise LarkError("feishu_failed", getattr(resp, "msg", "") or "")
-    return resp.data.record.record_id or ""
-
-
-def _ensure_bitable(settings: Settings) -> tuple[str, str]:
-    cfg = load_local_config(settings)
-    if cfg.get("bitable_app_token") and cfg.get("bitable_table_id"):
-        return str(cfg["bitable_app_token"]), str(cfg["bitable_table_id"])
-    from lark_oapi.api.bitable.v1 import (
-        AppTableCreateHeader,
-        CreateAppRequest,
-        CreateAppTableRequest,
-        CreateAppTableRequestBody,
-        ReqApp,
-        ReqTable,
-    )
-
-    client = _client(settings)
-    created = client.bitable.v1.app.create(
-        CreateAppRequest.builder()
-        .request_body(ReqApp.builder().name("小D收藏库").build())
-        .build()
-    )
-    if not created.success() or not created.data or not created.data.app:
-        raise LarkError("feishu_failed", getattr(created, "msg", "") or "")
-    app_token = created.data.app.app_token
-    fields = [
-        AppTableCreateHeader.builder().field_name("平台").type(1).build(),
-        AppTableCreateHeader.builder().field_name("标题").type(1).build(),
-        AppTableCreateHeader.builder().field_name("作者").type(1).build(),
-        AppTableCreateHeader.builder().field_name("链接").type(15).build(),
-        AppTableCreateHeader.builder().field_name("摘要").type(1).build(),
-        AppTableCreateHeader.builder().field_name("采集日").type(1).build(),
-        AppTableCreateHeader.builder().field_name("cache_url").type(1).build(),
-    ]
-    table = client.bitable.v1.app_table.create(
-        CreateAppTableRequest.builder()
-        .app_token(app_token)
-        .request_body(
-            CreateAppTableRequestBody.builder()
-            .table(ReqTable.builder().name("收藏").fields(fields).build())
-            .build()
-        )
-        .build()
-    )
-    if not table.success() or not table.data or not table.data.table_id:
-        raise LarkError("feishu_failed", getattr(table, "msg", "") or "")
-    save_local_config({"bitable_app_token": app_token, "bitable_table_id": table.data.table_id}, settings)
-    return app_token, table.data.table_id

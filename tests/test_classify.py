@@ -21,9 +21,15 @@ def test_social_is_out_of_scope() -> None:
     assert classify_text("https://mp.weixin.qq.com/s/abcdef").source_type == "wechat_mp"
 
 
-def test_paywall_and_unknown() -> None:
-    assert classify_text("这是付费课程 https://www.xiaoyuzhoufm.com/episode/1").route == "human"
+def test_unknown_and_minutes_are_refused() -> None:
     assert classify_text("你好").route == "human"
+    minutes = classify_text("请整理 https://example.feishu.cn/minutes/obcnxxxxx")
+    assert minutes.source_type == "minutes"
+    assert minutes.route == "human"
+    assert minutes.pending_human == "unsupported_minutes"
+    doc = classify_text("https://example.feishu.cn/docx/abc")
+    assert doc.source_type == "unknown"
+    assert doc.route == "human"
 
 
 def test_status_without_url() -> None:

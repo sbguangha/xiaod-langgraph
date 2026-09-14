@@ -1,11 +1,11 @@
-"""Parent-graph reply and human-gate nodes."""
+"""Parent-graph reply nodes for out-of-scope and status."""
 
 from __future__ import annotations
 
 from xiaod.messages import (
     ACK_MEDIA,
-    ASK_PAYWALL,
     ASK_UNKNOWN,
+    ASK_UNSUPPORTED_MINUTES,
     ASK_UNSUPPORTED_SOCIAL,
     STATUS_IDLE,
     STATUS_RUNNING,
@@ -16,8 +16,8 @@ from xiaod.state import JobState
 
 def ask_human(state: JobState) -> dict:
     pending = state.get("pending_human") or ""
-    if pending == "paywall":
-        return {"reply_message": ASK_PAYWALL, "status": "needs_human"}
+    if pending == "unsupported_minutes":
+        return {"reply_message": ASK_UNSUPPORTED_MINUTES, "status": "needs_human"}
     if pending == "unsupported_social":
         return {"reply_message": ASK_UNSUPPORTED_SOCIAL, "status": "needs_human"}
     return {"reply_message": ASK_UNKNOWN, "status": "needs_human"}

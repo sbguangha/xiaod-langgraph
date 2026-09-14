@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, NotRequired, TypedDict
+from typing import Annotated, NotRequired, TypedDict
 import operator
 import uuid
 
 
-MEDIA_SOURCES = frozenset({"xiaoyuzhou", "bilibili", "youtube", "local", "minutes"})
+MEDIA_SOURCES = frozenset({"xiaoyuzhou", "bilibili", "youtube", "local"})
 SOCIAL_SOURCES = frozenset({"xhs", "douyin", "wechat_mp", "channels"})
-VIDEO_SOCIAL_SOURCES = frozenset({"douyin", "channels"})
 
 
 class JobState(TypedDict):
@@ -29,15 +28,10 @@ class JobState(TypedDict):
     feishu_url: str
     feishu_doc_token: str
     permission_granted: bool
-    bitable_record_ids: list[str]
-    tikhub_calls: int
     used_subtitle: bool
     duration_sec: int
     eta_minutes: int
     user_intent: str
-    research_kind: str
-    social_item: dict[str, Any]
-    brief: str
     errors: Annotated[list[str], operator.add]
     pending_human: str
     reply_message: str
@@ -77,15 +71,10 @@ def empty_state(
         "feishu_url": "",
         "feishu_doc_token": "",
         "permission_granted": False,
-        "bitable_record_ids": [],
-        "tikhub_calls": 0,
         "used_subtitle": False,
         "duration_sec": 0,
         "eta_minutes": 0,
         "user_intent": "",
-        "research_kind": "",
-        "social_item": {},
-        "brief": "",
         "errors": [],
         "pending_human": "",
         "reply_message": "",

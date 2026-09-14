@@ -80,6 +80,7 @@ def test_missing_job_is_human() -> None:
 
 
 def test_social_copy_constant() -> None:
+    assert "不采集" in ASK_UNSUPPORTED_SOCIAL
     assert "小宇宙" in ASK_UNSUPPORTED_SOCIAL
 
 

@@ -190,7 +190,7 @@ onUnmounted(() => {
       <p class="kicker">航海 10096 · 官方小 D</p>
       <h1>音视频转录整理助理</h1>
       <p class="lead">
-        当收到一个播客 / 视频 / 会议录音链接时，自动下载音频、转录文字、整理成分享式提纯稿，并创建飞书文档交付链接。
+        当收到一个公开播客或视频链接时，自动下载音频、转录文字、整理成分享式提纯稿，并创建飞书文档交付链接。
       </p>
       <div class="chips">
         <span :class="['chip', config.has_ytdlp ? 'ok' : 'off']">yt-dlp {{ config.has_ytdlp ? "已安装" : "未安装" }}</span>
@@ -275,7 +275,7 @@ onUnmounted(() => {
           <li>YouTube：打开一个没设私密/会员的视频，复制地址栏。</li>
         </ul>
         <h3>本期不做</h3>
-        <p class="hint">不做小红书 / 抖音 / 公众号采集，不接收费接口，不发布原片，不绕过登录墙。</p>
+        <p class="hint">不做小红书 / 抖音 / 公众号 / 视频号采集，不处理飞书妙记，不发布原片，不绕过登录墙。</p>
       </aside>
     </section>
 
